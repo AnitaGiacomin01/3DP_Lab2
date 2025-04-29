@@ -100,7 +100,14 @@ void FeatureMatcher::exhaustiveMatching()
       const cv::Mat &desc2 = descriptors_[j];
       if (desc1.empty() || desc2.empty()) continue;
 
-      matcher->match(desc1, desc2, matches);
+      //if (desc1.type() != CV_32F) std::cout << "Wrong format!\n";
+      // Converting to appropriate format for DescriptorMatcher
+      cv::Mat query, train;
+      desc1.convertTo(query,CV_32F);
+      desc2.convertTo(train,CV_32F);
+
+      matcher->match(query, train, matches);
+
       if (matches.empty()) 
       {
         std::cout << "No matches found between " << i << "and " << j << "\n";

@@ -539,10 +539,10 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
   int valid_pts = cv::recoverPose(E, points0, points1, intrinsics_matrix, R, t, inlier_mask_E);
 
   // Check if the recovered transformation is mainly given by a sideward motion, which is better than forward one.
-  double side = std::abs(t.at<double>(0)) 
+  double side = std::abs(t.at<double>(0));
   double updown = std::abs(t.at<double>(1));
-  double forw  = std::abs(t.at<double>(2));
-  if (side < forw || updown < forward) return false;
+  double forward = std::abs(t.at<double>(2));
+  if (side < forward || updown < forward) return false;
   
   // In case of "good" sideward motion, store the transformation into init_r_mat and  init_t_vec; defined above
   init_r_mat = R.clone();
