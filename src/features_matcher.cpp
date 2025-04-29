@@ -38,10 +38,25 @@ void FeatureMatcher::extractFeatures()
     // it into feats_colors_[i] vector
     /////////////////////////////////////////////////////////////////////////////////////////
 
+    cv::Ptr<cv::ORB> orb = cv::ORB::create();
+    std::vector<cv::KeyPoint> keypoints;
 
-    
-    
-    
+    orb->detect(img, keypoints);
+
+    cv::Mat descriptors;
+    orb->compute(img, keypoints, descriptors);
+
+    features_[i] = keypoints;
+    descriptors_[i] = descriptors;
+
+    feats_colors_[i].resize(features_[i].size());
+    for (size_t k = 0; k < features_[i].size(); ++k) {
+      cv::Point2f p = features_[i][k].pt;
+      int x = cvRound(p.x), y = cvRound(p.y);
+      x = std::min(std::max(x, 0), img.cols - 1);
+      y = std::min(std::max(y, 0), img.rows - 1);
+      feats_colors_[i][k] = img.at<cv::Vec3b>(y, x);
+    }
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 }
@@ -71,11 +86,44 @@ void FeatureMatcher::exhaustiveMatching()
       // setMatches( i, j, inlier_matches);
       /////////////////////////////////////////////////////////////////////////////////////////
 
-      
-      
-      
-      
+      const cv::Mat &desc1 = descriptors_[i];
+      const cv::Mat &desc2 = descriptors_[j];
+      if (desc1.empty() || desc2.empty()) continue;
 
+      matcher.match(desc1, desc2, matches);
+      if (matches.empty()) continue;
+
+      std::vector<cv::Point2f> pts1, pts2;
+      pts1.reserve(matches.size()); pts2.reserve(matches.size());
+      for (const auto &m : matches) {
+        pts1.push_back(features_[i][m.queryIdx].pt);
+        pts2.push_back(features_[j][m.trainIdx].pt);
+      }
+
+      cv::Mat maskE;
+      int inliersE = 0;
+      if (!pts1.empty()) {
+        cv::Mat E = cv::findEssentialMat(pts1, pts2, new_intrinsics_matrix_, cv::RANSAC, 0.999, 1.0, maskE);
+        inliersE = maskE.empty() ? 0 : cv::countNonZero(maskE);
+      }
+
+      cv::Mat maskH;
+      int inliersH = 0;
+      if (!pts1.empty()) {
+        cv::Mat H = cv::findHomography(pts1, pts2, cv::RANSAC, 1.0, maskH);
+        inliersH = maskH.empty() ? 0 : cv::countNonZero(maskH);
+      }
+
+      if (inliersE > inliersH && inliersE > 5) {
+        inlier_matches.clear();
+        for (size_t k = 0; k < matches.size(); ++k) {
+          if (maskE.at<uchar>(static_cast<int>(k))) {
+            inlier_matches.push_back(matches[k]);
+          }
+        }
+        if (inlier_matches.size() > 5)
+          setMatches(i, j, inlier_matches);
+      }
       /////////////////////////////////////////////////////////////////////////////////////////
 
     }
