@@ -43,6 +43,8 @@ void FeatureMatcher::extractFeatures()
 
     orb->detect(img, keypoints);
 
+    std::cout << "Found " << keypoints.size() << "keypoints.\n";
+
     cv::Mat descriptors;
     orb->compute(img, keypoints, descriptors);
 
@@ -50,11 +52,11 @@ void FeatureMatcher::extractFeatures()
     descriptors_[i] = descriptors;
 
     feats_colors_[i].resize(features_[i].size());
-    for (size_t k = 0; k < features_[i].size(); ++k) {
+    for (int k = 0; k < features_[i].size(); k++) {
       cv::Point2f p = features_[i][k].pt;
       int x = cvRound(p.x), y = cvRound(p.y);
-      x = std::min(std::max(x, 0), img.cols - 1);
-      y = std::min(std::max(y, 0), img.rows - 1);
+      //x = std::min(std::max(x, 0), img.cols - 1);
+      //y = std::min(std::max(y, 0), img.rows - 1);
       feats_colors_[i][k] = img.at<cv::Vec3b>(y, x);
     }
     /////////////////////////////////////////////////////////////////////////////////////////
@@ -85,13 +87,22 @@ void FeatureMatcher::exhaustiveMatching()
       // In case of success, set the matches with the function:
       // setMatches( i, j, inlier_matches);
       /////////////////////////////////////////////////////////////////////////////////////////
+      
+      const int INLIERS_THRESHOLD = 5;
 
       const cv::Mat &desc1 = descriptors_[i];
       const cv::Mat &desc2 = descriptors_[j];
       if (desc1.empty() || desc2.empty()) continue;
+      
+      cv::Ptr<cv::DescriptorMatcher> matcher =
+        cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
 
-      matcher.match(desc1, desc2, matches);
-      if (matches.empty()) continue;
+      matcher->match(desc1, desc2, matches);
+      if (matches.empty()) 
+      {
+        std::cout << "No matches found between " << i << "and " << j << "\n";
+        continue;
+      }
 
       std::vector<cv::Point2f> pts1, pts2;
       pts1.reserve(matches.size()); pts2.reserve(matches.size());
@@ -114,15 +125,18 @@ void FeatureMatcher::exhaustiveMatching()
         inliersH = maskH.empty() ? 0 : cv::countNonZero(maskH);
       }
 
-      if (inliersE > inliersH && inliersE > 5) {
+      if (inliersE > inliersH && inliersE > INLIERS_THRESHOLD) {
         inlier_matches.clear();
-        for (size_t k = 0; k < matches.size(); ++k) {
+        for (int k = 0; k < matches.size(); k++) {
           if (maskE.at<uchar>(static_cast<int>(k))) {
             inlier_matches.push_back(matches[k]);
           }
         }
-        if (inlier_matches.size() > 5)
+        if (inlier_matches.size() > INLIERS_THRESHOLD)
+        {
+          std::cout << "Images " << i << " and " << j << " have enough inliers\n";
           setMatches(i, j, inlier_matches);
+        }
       }
       /////////////////////////////////////////////////////////////////////////////////////////
 
