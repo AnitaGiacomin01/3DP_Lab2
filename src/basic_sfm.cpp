@@ -520,13 +520,34 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
   // In case of "good" sideward motion, store the transformation into init_r_mat and  init_t_vec; defined above
   /////////////////////////////////////////////////////////////////////////////////////////
 
-  
-  
-  
-  
-  
-  
+  // The minimum number of points to compute the essential matrix is 8
+  if (points0.size() < 8) return false;  
 
+  // Extract both Essential matrix E and Homograph matrix H.
+  cv::Mat E = cv::findEssentialMat(points0, points1, intrinsics_matrix, cv::RANSAC, 0.999, 0.001, inlier_mask_E);
+  cv::Mat H = cv::findHomography(points0, points1, cv::RANSAC, 0.001, inlier_mask_H);
+  
+  // Check that the number of inliers for the model E is higher than the number of inliers for the model H
+  int inliers_E = cv::countNonZero(inlier_mask_E);
+  int inliers_H = cv::countNonZero(inlier_mask_H);
+
+  if (inliers_E <= inliers_H) return false;
+
+  // If true, recover from E the initial rigid body transformation between seed_pair_idx0
+  // and seed_pair_idx1 by using the cv::recoverPose() OpenCV function
+  cv::Mat R, t;
+  int valid_pts = cv::recoverPose(E, points0, points1, intrinsics_matrix, R, t, inlier_mask_E);
+
+  // Check if the recovered transformation is mainly given by a sideward motion, which is better than forward one.
+  double side = std::abs(t.at<double>(0)) 
+  double updown = std::abs(t.at<double>(1));
+  double forw  = std::abs(t.at<double>(2));
+  if (side < forw || updown < forward) return false;
+  
+  // In case of "good" sideward motion, store the transformation into init_r_mat and  init_t_vec; defined above
+  init_r_mat = R.clone();
+  init_t_vec = t.clone();
+  
   /////////////////////////////////////////////////////////////////////////////////////////
 
   int ref_cam_pose_idx = seed_pair_idx0, new_cam_pose_idx = seed_pair_idx1;
