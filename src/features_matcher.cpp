@@ -26,6 +26,11 @@ void FeatureMatcher::extractFeatures()
   descriptors_.resize(images_names_.size());
   feats_colors_.resize(images_names_.size());
 
+  // Creating the matcher outside of the loop to avoid reinitializing it
+  // Setting the maximum number of features to a very high number to make sure
+  // we have enough for an exhaustive match
+  cv::Ptr<cv::ORB> orb = cv::ORB::create(10000);
+
   for( int i = 0; i < images_names_.size(); i++  )
   {
     std::cout<<"Computing descriptors for image "<<i<<std::endl;
@@ -38,12 +43,11 @@ void FeatureMatcher::extractFeatures()
     // it into feats_colors_[i] vector
     /////////////////////////////////////////////////////////////////////////////////////////
 
-    cv::Ptr<cv::ORB> orb = cv::ORB::create();
     std::vector<cv::KeyPoint> keypoints;
 
     orb->detect(img, keypoints);
 
-    std::cout << "Found " << keypoints.size() << "keypoints.\n";
+    std::cout << "Found " << keypoints.size() << " keypoints.\n";
 
     cv::Mat descriptors;
     orb->compute(img, keypoints, descriptors);
@@ -66,6 +70,8 @@ void FeatureMatcher::extractFeatures()
 void FeatureMatcher::exhaustiveMatching()
 {
   std::vector<cv::DMatch> matches, inlier_matches;
+  cv::Ptr<cv::DescriptorMatcher> matcher =
+        cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
   
   for( int i = 0; i < images_names_.size() - 1; i++ )
   {
@@ -93,9 +99,6 @@ void FeatureMatcher::exhaustiveMatching()
       const cv::Mat &desc1 = descriptors_[i];
       const cv::Mat &desc2 = descriptors_[j];
       if (desc1.empty() || desc2.empty()) continue;
-      
-      cv::Ptr<cv::DescriptorMatcher> matcher =
-        cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
 
       matcher->match(desc1, desc2, matches);
       if (matches.empty()) 
