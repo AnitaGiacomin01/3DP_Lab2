@@ -733,11 +733,45 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
             // pt[2] = /*X coordinate of the estimated point */;
             /////////////////////////////////////////////////////////////////////////////////////////
 
-                
-                
+            cv::Mat r0(3, 1, CV_64F, cam0_data);
+            cv::Mat r1(3, 1, CV_64F, cam1_data);
+            cv::Mat R0, R1;
+            cv::Rodrigues(r0, R0);
+            cv::Rodrigues(r1, R1);
 
-                
-                
+            cv::Mat t0 = (cv::Mat_<double>(3,1) << cam0_data[3], cam0_data[4], cam0_data[5]);
+            cv::Mat t1 = (cv::Mat_<double>(3,1) << cam1_data[3], cam1_data[4], cam1_data[5]);
+
+            cv::hconcat(R0, t0, proj_mat0);
+            cv::hconcat(R1, t1, proj_mat1);
+            proj_mat0 = intrinsics_matrix * proj_mat0;
+            proj_mat1 = intrinsics_matrix * proj_mat1;
+
+            // Triangulate the 3D point with index pt_idx by using the observation of this point in the camera poses with indices new_cam_pose_idx and cam_idx.
+            points0[0] = img_pts[cam_observation_[new_cam_pose_idx][pt_idx]];
+            points1[0] = img_pts[cam_observation_[cam_idx][pt_idx]];
+
+            cv::triangulatePoints(proj_mat0, proj_mat1, points0, points1, hpoints4D);
+
+            cv::Mat X = hpoints4D.col(0);
+            cv::Point3d point_3d(X.at<double>(0)/X.at<double>(3),
+                                 X.at<double>(1)/X.at<double>(3),
+                                 X.at<double>(2)/X.at<double>(3));
+
+            cv::Mat pt_cam0 = R0 * cv::Mat(point_3d) + t0;
+            cv::Mat pt_cam1 = R1 * cv::Mat(point_3d) + t1;
+
+            // check the cheirality constraint for both cameras
+            if (pt_cam0.at<double>(2) > 0 && pt_cam1.at<double>(2) > 0)
+            {
+              n_new_pts++;
+              pts_optim_iter_[pt_idx] = 1;
+              double *pt = pointBlockPtr(pt_idx);
+              pt[0] = point_3d.x;
+              pt[1] = point_3d.y;
+              pt[2] = point_3d.z;
+            }
+
             /////////////////////////////////////////////////////////////////////////////////////////
 
           }
