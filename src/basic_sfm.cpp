@@ -857,6 +857,36 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
     //  if( <bad reconstruction> )
     //    return false;
 
+    // Possible strategy: compute reprojection errors,
+    // check if average exceeds max_reproj_err_ (times a constant?)
+    const double LAMBDA = 1.0;
+
+    double current_reprojection_error = 0;
+    int factored_observations = 0;
+    // Check every observation if it's being currently factored
+    for (int i_obs=0; i_obs<num_observations_; i_obs++)
+    {
+      int camera_index = cam_pose_index_[i_obs];
+      if (cam_pose_optim_iter_[camera_index] != 1) continue;
+      factored_observations++;
+
+      // We can reuse the ReprojectionError struct we defined
+      // for the previous task for calculating the reprojection error
+      ReprojectionError* err = 
+        new ReprojectionError(observations_[2*i_obs],observations_[2*i_obs+1]);
+      
+      double residuals[2] = {0,0};
+      (*err)(cameraBlockPtr(camera_index),pointBlockPtr(i_obs),residuals);
+      current_reprojection_error += 
+        residuals[0]*residuals[0] + residuals[1]*residuals[1];
+    }
+    // Compute average
+    current_reprojection_error /= factored_observations;
+
+    // If the reprojection error is too high we're probably in a bad state
+    if (current_reprojection_error > LAMBDA*max_reproj_err_)
+      return false;
+
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 
@@ -924,9 +954,6 @@ void BasicSfM::bundleAdjustmentIter( int new_cam_idx )
           cameraBlockPtr(cam_pose_index_[i_obs]), // camera pose estimate
           pointBlockPtr(point_index_[i_obs]) // 3d point estimate
         );
-          
-        auto x = parameters_.data()[1,2];
-        
         
         
         /////////////////////////////////////////////////////////////////////////////////////////
