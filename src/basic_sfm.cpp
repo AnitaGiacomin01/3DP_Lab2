@@ -929,7 +929,7 @@ void BasicSfM::bundleAdjustmentIter( int new_cam_idx )
           parameters_.data()[point, point+3] // 3d point estimate
         );
           
-        auto x = parameters_.data()
+        auto x = parameters_.data()[1,2];
         
         
         
