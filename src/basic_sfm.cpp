@@ -23,28 +23,33 @@ struct ReprojectionError
   // pay attention to the order of the template parameters
   //////////////////////////////////////////////////////////////////////////////////////////
   
+  ReprojectionError(const double u, const double v)
+    : u_(v), v_(v) {}
+
   template<typename T>
   bool operator()(
     const T* const cameraPose, // pointer to axis-angle followed by translation
     const T* const point3d, // estimated 3d position of observed point
-    const T* const pointProjected, // image plane projection
     T* residual
   )
   {
-    T reprojected[3]; // estimated reprojection of point
+    T reprojected[3]; // estimated reprojection of point (canonical coords)
     ceres::AngleAxisRotatePoint(cameraPose,point3d,reprojected);
     for (int i=0; i<3; i++)
     {
       reprojected[i] += cameraPose[i+3]; // add translation
     }
 
-    residual[0] = reprojected[0]/reprojected[2] - pointProjected[0];
-    residual[1] = reprojected[1]/reprojected[2] - pointProjected[1];
+    residual[0] = reprojected[0]/reprojected[2] - u_;
+    residual[1] = reprojected[1]/reprojected[2] - v_;
 
     return true;
   }
   
-  
+  private:
+    // projected observation
+    const double u_;
+    const double v_;
   
   /////////////////////////////////////////////////////////////////////////////////////////
 };
@@ -907,8 +912,24 @@ void BasicSfM::bundleAdjustmentIter( int new_cam_idx )
         // while the point position blocks have size (point_block_size_) of 3 elements.
         //////////////////////////////////////////////////////////////////////////////////
 
-
+        ceres::CostFunction* cost_function =
+          new ceres::AutoDiffCostFunction<ReprojectionError,2,6,3>(
+            // instantiate reproj error with observation (u,v)
+            new ReprojectionError(observations_[i_obs],observations_[i_obs+1])
+          );
         
+        
+        int pose = cam_pose_index_[i_obs];
+        int point = num_cam_poses_ + point_index_[i_obs];
+
+        problem.AddResidualBlock(
+          cost_function,
+          ceres::CauchyLoss(2*max_reproj_err_)),
+          parameters_.data()[pose, pose+6], // camera pose estimate
+          parameters_.data()[point, point+3] // 3d point estimate
+        );
+          
+        auto x = parameters_.data()
         
         
         
