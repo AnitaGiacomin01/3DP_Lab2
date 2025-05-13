@@ -915,18 +915,14 @@ void BasicSfM::bundleAdjustmentIter( int new_cam_idx )
         ceres::CostFunction* cost_function =
           new ceres::AutoDiffCostFunction<ReprojectionError,2,6,3>(
             // instantiate reproj error with observation (u,v)
-            new ReprojectionError(observations_[i_obs],observations_[i_obs+1])
+            new ReprojectionError(observations_[2*i_obs],observations_[2*i_obs+1])
           );
-        
-        
-        int pose = cam_pose_index_[i_obs];
-        int point = num_cam_poses_ + point_index_[i_obs];
 
         problem.AddResidualBlock(
           cost_function,
-          ceres::CauchyLoss(2*max_reproj_err_)),
-          parameters_.data()[pose, pose+6], // camera pose estimate
-          parameters_.data()[point, point+3] // 3d point estimate
+          new ceres::CauchyLoss(2*max_reproj_err_),
+          cameraBlockPtr(cam_pose_index_[i_obs]), // camera pose estimate
+          pointBlockPtr(point_index_[i_obs]) // 3d point estimate
         );
           
         auto x = parameters_.data()[1,2];
