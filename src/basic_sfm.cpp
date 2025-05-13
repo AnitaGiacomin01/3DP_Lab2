@@ -23,7 +23,21 @@ struct ReprojectionError
   // pay attention to the order of the template parameters
   //////////////////////////////////////////////////////////////////////////////////////////
   
-  
+  template<typename T>
+  bool operator()(
+    const T* const cameraPose, // pointer to axis-angle followed by translation
+    const T* const point3d, // estimated 3d position of observed point
+    const T* const pointProjected, // image plane projection
+    T* residual
+  )
+  {
+    T reprojected[3]; // estimated reprojection of point
+    ceres::AngleAxisRotatePoint(cameraPose,point3d,reprojected);
+    reprojected += cameraPose[3];
+
+    residual[0] = reprojected[0]/reprojected[2] - pointProjected[0];
+    residual[1] = reprojected[1]/reprojected[2] - pointProjected[1];
+  }
   
   
   
