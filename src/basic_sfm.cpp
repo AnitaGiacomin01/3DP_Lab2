@@ -33,10 +33,15 @@ struct ReprojectionError
   {
     T reprojected[3]; // estimated reprojection of point
     ceres::AngleAxisRotatePoint(cameraPose,point3d,reprojected);
-    reprojected += cameraPose[3];
+    for (int i=0; i<3; i++)
+    {
+      reprojected[i] += cameraPose[i+3]; // add translation
+    }
 
     residual[0] = reprojected[0]/reprojected[2] - pointProjected[0];
     residual[1] = reprojected[1]/reprojected[2] - pointProjected[1];
+
+    return true;
   }
   
   
