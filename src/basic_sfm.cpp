@@ -22,34 +22,37 @@ struct ReprojectionError
   // WARNING: When dealing with the AutoDiffCostFunction template parameters,
   // pay attention to the order of the template parameters
   //////////////////////////////////////////////////////////////////////////////////////////
-  
+
+  double u_;
+  double v_;
+
   ReprojectionError(const double u, const double v)
-    : u_(v), v_(v) {}
+  : u_(u), v_(v) {}
 
   template<typename T>
- bool operator()(
-    const T* const cameraPose, // pointer to axis-angle followed by translation
-    const T* const point3d, // estimated 3d position of observed point
-    T* residual
-  )
-  const {
-    T reprojected[3]; // estimated reprojection of point (canonical coords)
-    ceres::AngleAxisRotatePoint(cameraPose,point3d,reprojected);
-    for (int i=0; i<3; i++)
-    {
-      reprojected[i] += cameraPose[i+3]; // add translation
-    }
+  bool operator()(
+    const T* const cameraParams,
+    const T* const point3d,
+    T* residuals
+  ) 
+  const 
+  {
+    // Compute the reprojected point
+    // given the estimated camera params and point coordinates
+    T reprojected[3];
+    ceres::AngleAxisRotatePoint(cameraParams,point3d,reprojected);
+    reprojected[0] = reprojected[0] + cameraParams[3];
+    reprojected[1] = reprojected[1] + cameraParams[4];
+    reprojected[2] = reprojected[2] + cameraParams[5];
 
-    residual[0] = reprojected[0]/reprojected[2] - u_;
-    residual[1] = reprojected[1]/reprojected[2] - v_;
+    // Convert to inhomogeneous coordinates, compute residuals for both axes
+    const T predicted_u = reprojected[0]/reprojected[2];
+    const T predicted_v = reprojected[1]/reprojected[2];
+    residuals[0] = predicted_u - T(u_);
+    residuals[1] = predicted_v - T(v_);
 
     return true;
   }
-  
-  private:
-    // projected observation
-    const double u_;
-    const double v_;
   
   /////////////////////////////////////////////////////////////////////////////////////////
 };
@@ -563,10 +566,16 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
   int valid_pts = cv::recoverPose(E, points0, points1, intrinsics_matrix, R, t, inlier_mask_E);
 
   // Check if the recovered transformation is mainly given by a sideward motion, which is better than forward one.
-  double side = std::abs(t.at<double>(0));
-  double updown = std::abs(t.at<double>(1));
-  double forward = std::abs(t.at<double>(2));
-  if (side < forward || updown < forward) return false;
+  //double side = std::abs(t.at<double>(0));
+  //double updown = std::abs(t.at<double>(1));
+  //double forward = std::abs(t.at<double>(2));
+  //if (side < forward || updown < forward) return false;
+
+  if (fabs(t.at<double>(0, 0)) < fabs(t.at<double>(2, 0))) 
+  {
+    std::cout << "Mostly a forward/backward motion, aborting\n";
+    return false;
+  }
   
   // In case of "good" sideward motion, store the transformation into init_r_mat and  init_t_vec; defined above
   init_r_mat = R.clone();
@@ -786,7 +795,8 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
             cv::Mat pt_cam1 = R1 * cv::Mat(point_3d) + t1;
 
             // check the cheirality constraint for both cameras
-            if (pt_cam0.at<double>(2) > 0 && pt_cam1.at<double>(2) > 0)
+            if (checkCheiralityConstraint(cam_idx,pt_idx))
+            //if (pt_cam0.at<double>(2) > 0 && pt_cam1.at<double>(2) > 0)
             {
               n_new_pts++;
               pts_optim_iter_[pt_idx] = 1;
@@ -795,6 +805,39 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
               pt[1] = point_3d.y;
               pt[2] = point_3d.z;
             }
+
+            /*points0.emplace_back(observations_[cam_observation_[new_cam_pose_idx][pt_idx] * 2], observations_[cam_observation_[new_cam_pose_idx][pt_idx]*2 +1]);
+            points1.emplace_back(observations_[cam_observation_[cam_idx][pt_idx]*2], observations_[cam_observation_[cam_idx][pt_idx] * 2 + 1]);
+            
+            //Index:0,1,2 contains R and 3,4,5 t
+            //We use Rodrigues to convert from axis angle to matrix form for both camera 0-1
+            cv::Rodrigues(cv::Vec3d(cam0_data[0],cam0_data[1],cam0_data[2]),proj_mat0(cv::Rect(0,0,3,3)));
+            proj_mat0.at<double>(0,3) = cam0_data[3];
+            proj_mat0.at<double>(1,3) = cam0_data[4];
+            proj_mat0.at<double>(2,3) = cam0_data[5];
+
+            cv::Rodrigues(cv::Vec3d(cam1_data[0],cam1_data[1],cam1_data[2]),proj_mat1(cv::Rect(0,0,3,3)));
+            proj_mat1.at<double>(0,3) = cam1_data[3];
+            proj_mat1.at<double>(1,3) = cam1_data[4];
+            proj_mat1.at<double>(2,3) = cam1_data[5];
+            
+            cv::triangulatePoints(proj_mat0, proj_mat1, points0, points1, hpoints4D);
+
+            //Check the cheirality constaint for pt_idx using the observation of this point in the
+            //camera poses with indices new_cam_pose_idx and cam_idx
+            int rr = 0;  
+            if(checkCheiralityConstraint(cam_idx,pt_idx) && checkCheiralityConstraint(new_cam_pose_idx,pt_idx)){
+              n_new_pts++;
+              pts_optim_iter_[pt_idx] = 1;
+              double *pt = pointBlockPtr(pt_idx);
+              pt[0] = hpoints4D.at<double>(0,rr)/hpoints4D.at<double>(3,rr);
+              pt[1] = hpoints4D.at<double>(1,rr)/hpoints4D.at<double>(3,rr);
+              pt[2] = hpoints4D.at<double>(2,rr)/hpoints4D.at<double>(3,rr);
+            }
+           
+            //Redundant, for security
+            points0.clear();
+            points1.clear();*/
 
             /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -885,8 +928,10 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
 
     // If the reprojection error is too high we're probably in a bad state
     if (current_reprojection_error > LAMBDA*max_reproj_err_)
+    {
+      std::cout << "Bad reconstruction, aborting\n";
       return false;
-
+    }
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 
@@ -960,7 +1005,8 @@ void BasicSfM::bundleAdjustmentIter( int new_cam_idx )
 
       }
     }
-
+    
+    std::cout<< "Attempting to solve problem\n";
     Solve(options, &problem, &summary);
 
     // WARNING Here poor optimization ... :(
