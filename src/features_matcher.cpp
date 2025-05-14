@@ -3,10 +3,6 @@
 #include <iostream>
 #include <map>
 
-//#include "opencv2/xfeatures2d.hpp"
-//#include "opencv2/xfeatures2d/nonfree.hpp"
-
-
 FeatureMatcher::FeatureMatcher(cv::Mat intrinsics_matrix, cv::Mat dist_coeffs, double focal_scale)
 {
   intrinsics_matrix_ = intrinsics_matrix.clone();
@@ -30,27 +26,10 @@ void FeatureMatcher::extractFeatures()
   descriptors_.resize(images_names_.size());
   feats_colors_.resize(images_names_.size());
 
-  //Used to select the descriptor: ORB,BRISK,AKAZE,SURF
-  int feature_detector_type = 0;
-  
-  int max_keypoints = 2000;
-  int scale = 2;
-  cv::Ptr<cv::ORB> orb_detector = cv::ORB::create(max_keypoints, scale); //0
-
-  int thresh_brisk = 30;
-  int octaves_brisk = 3;
-  cv::Ptr<cv::BRISK> brisk_detector = cv::BRISK::create(thresh_brisk, octaves_brisk); //1
-  
-  float thresh_akaze = 0.0001f;
-  int octaves_akaze = 8;
-  int octaves_layers = 6;
-  cv::Ptr<cv::AKAZE> akaze_detector = cv::AKAZE::create(cv::AKAZE::DESCRIPTOR_MLDB, 0, 3, thresh_akaze, octaves_akaze, octaves_layers); //2
-  //akaze_detector->setThreshold(0.0001);
-  //akaze_detector->setNOctaves(8);
-  //akaze_detector->setNOctaveLayers(6);
-
-  int hessian = 20;
-  //cv::Ptr<cv::xfeatures2d::SURF> surf_detector= cv::xfeatures2d::SURF::create(hessian); //3
+  // Creating the matcher outside of the loop to avoid reinitializing it
+  // Setting the maximum number of features to a very high number to make sure
+  // we have enough for an exhaustive match
+  cv::Ptr<cv::ORB> orb = cv::ORB::create(2000);
 
   for( int i = 0; i < images_names_.size(); i++  )
   {
@@ -63,52 +42,46 @@ void FeatureMatcher::extractFeatures()
     // Extract also the color (i.e., the cv::Vec3b information) of each feature, and store
     // it into feats_colors_[i] vector
     /////////////////////////////////////////////////////////////////////////////////////////
-    
-    //Convert to grey image, better and faster results 
-    cv::Mat grey;
-    cv::cvtColor(img, grey, cv::COLOR_BGR2GRAY);
 
-    switch(feature_detector_type){
+    cv::Mat img_gray;
+    cv::cvtColor(img,img_gray,cv::COLOR_BGR2GRAY);
 
-      case 0:
-        orb_detector->detectAndCompute(grey, cv::noArray(), features_[i], descriptors_[i]);
-        break;
-      
-      case 1:
-        brisk_detector->detectAndCompute(grey, cv::noArray(), features_[i], descriptors_[i]);
-        break;
-      
-      case 2:
-        akaze_detector->detectAndCompute(grey, cv::noArray(), features_[i], descriptors_[i]);
-        break;
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptors;
 
-     // case 3:
-       // surf_detector->detectAndCompute(grey, cv::noArray(), features_[i], descriptors_[i]);
-        //break;
-    
+    orb->detectAndCompute(img_gray,cv::noArray(),keypoints,descriptors);
+    std::cout << "Found " << keypoints.size() << " keypoints.\n";
+
+    features_[i] = keypoints;
+    descriptors_[i] = descriptors;
+
+    feats_colors_[i].resize(features_[i].size());
+    for (int k = 0; k < features_[i].size(); k++) {
+      cv::Point2f p = features_[i][k].pt;
+      int x = cvRound(p.x), y = cvRound(p.y);
+      //x = std::min(std::max(x, 0), img.cols - 1);
+      //y = std::min(std::max(y, 0), img.rows - 1);
+      feats_colors_[i][k] = img.at<cv::Vec3b>(y, x);
     }
-    
-    for(int j = 0; j < features_[i].size(); j++){
-
-      cv::Vec3b color = img.at<cv::Vec3b>(features_[i][j].pt);
-      feats_colors_[i].push_back(color);
-    }
-
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 }
 
-      
 void FeatureMatcher::exhaustiveMatching()
 {
- 
-  std::vector<cv::DMatch> matches, inlier_matches; //for each couple of images
+  std::vector<cv::DMatch> matches,inlier_matches;
 
+  // This one produces too many incorrect matches
+  //cv::Ptr<cv::DescriptorMatcher> matcher =
+  //      cv::DescriptorMatcher::create(cv::DescriptorMatcher::BRUTEFORCE_HAMMING);
+  // Attempting to use BFMatcher and knnMatches for ratio calculation
+  //cv::Ptr<cv::BFMatcher> matcher =
+  //  cv::BFMatcher::create(cv::NORM_HAMMING, true);
+  
   for( int i = 0; i < images_names_.size() - 1; i++ )
   {
     for( int j = i + 1; j < images_names_.size(); j++ )
     {
-      
       std::cout<<"Matching image "<<i<<" with image "<<j<<std::endl;
 
       //////////////////////////// Code to be completed (2/7) /////////////////////////////////
@@ -125,83 +98,105 @@ void FeatureMatcher::exhaustiveMatching()
       // In case of success, set the matches with the function:
       // setMatches( i, j, inlier_matches);
       /////////////////////////////////////////////////////////////////////////////////////////
-
-      float threshold = 1.0f;
-      int min_matches = 5;
-
-      //We need to use NORM_HAMMING for both ORB, BRISK, but is better NORM_L2 for SURF (other commented matcher)
-      cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING, true);
       
-      //SURF (remembre: comment line 133 and change values in point 1/7 to use it)
-      //cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_L2,false);
+      /*const int INLIERS_THRESHOLD = 5;
+      //cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING,false);
+      //cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create(
+      //  cv::DescriptorMatcher::FLANNBASED
+      //);
+      cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING, true);
 
+
+      const cv::Mat &desc1 = descriptors_[i];
+      const cv::Mat &desc2 = descriptors_[j];
+      if (desc1.empty() || desc2.empty()) continue;
+
+      //if (desc1.type() != CV_32F) std::cout << "Wrong format!\n";
+      // Converting to appropriate format for DescriptorMatcher
+      cv::Mat query, train;
+      desc1.convertTo(query,CV_32F);
+      desc2.convertTo(train,CV_32F);
+
+
+      // Problems with knnmatch, short-circuiting with normal match
+      std::vector<cv::DMatch> good_matches;
+      matcher->match(query,train,good_matches);
+      if (good_matches.empty()) 
+      {
+        std::cout << "No matches found between " << i << " and " << j << "\n";
+        continue;
+      }
+
+      std::vector<cv::Point2f> pts1, pts2;
+      pts1.reserve(good_matches.size()); pts2.reserve(good_matches.size());
+      for (const auto &m : good_matches) {
+        pts1.push_back(features_[i][m.queryIdx].pt);
+        pts2.push_back(features_[j][m.trainIdx].pt);
+      }
+
+      cv::Mat maskE;
+      int inliersE = 0;
+      if (!pts1.empty()) {
+        cv::Mat E = cv::findEssentialMat(pts1, pts2, new_intrinsics_matrix_, cv::RANSAC, 0.999, 1.0, maskE);
+        inliersE = maskE.empty() ? 0 : cv::countNonZero(maskE);
+      }
+
+      cv::Mat maskH;
+      int inliersH = 0;
+      if (!pts1.empty()) {
+        cv::Mat H = cv::findHomography(pts1, pts2, cv::RANSAC, 1.0, maskH);
+        inliersH = maskH.empty() ? 0 : cv::countNonZero(maskH);
+      }
+
+      if (inliersE > inliersH && inliersE > INLIERS_THRESHOLD) {
+        inlier_matches.clear();
+        for (int k = 0; k < good_matches.size(); k++) {
+          if (maskE.at<uchar>(static_cast<int>(k))) {
+            inlier_matches.push_back(good_matches[k]);
+          }
+        }
+        if (inlier_matches.size() > INLIERS_THRESHOLD)
+        {
+          std::cout << "Images " << i << " and " << j << " have enough inliers\n";
+          setMatches(i, j, inlier_matches);
+        }
+      }*/
+
+      const float THRESHOLD = 1.0f;
+      const int MINIMUM_INLIERS = 5;
+
+      // Creating and applying matcher
+      cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING, true);
       matcher->match(descriptors_[i], descriptors_[j], matches);
 
-      std::vector<cv::Point2f> points_1, points_2;
+      std::vector<cv::Point2f> match_pts1, match_pts2;
 
       for(int k = 0; k < matches.size(); k++ )
       {
-        points_1.push_back(features_[i][matches[k].queryIdx].pt);
-        points_2.push_back(features_[j][matches[k].trainIdx].pt);
+        match_pts1.push_back(features_[i][matches[k].queryIdx].pt);
+        match_pts2.push_back(features_[j][matches[k].trainIdx].pt);
       }
-
-      //Only for AKAZE we use knn, decomment here and comment lines 133-146
-      //if you want to use akaze
-      /*
-      cv::BFMatcher matcher(cv::NORM_HAMMING);
-      std::vector<std::vector<cv::DMatch>> knn_matches;
-      matcher.knnMatch(descriptors_[i], descriptors_[j], knn_matches, 2);
-      const float ratio_threshold = 0.8f;
-      std::vector<cv::Point2f> points_1, points_2;
-      for (const auto &m: knn_matches) 
-      {
-          if (m[0].distance < ratio_threshold * m[1].distance) 
-          { 
-            matches.push_back(m[0]);
-            points_1.push_back(features_[i][m[0].queryIdx].pt);
-            points_2.push_back(features_[j][m[0].trainIdx].pt);
-          }
-      }
-      */
       
-      
-      // Perform geometric validation using Essential matrix
-      cv::Mat inlier_mask_E;
-      cv::Mat essential_matrix;
-      essential_matrix = cv::findEssentialMat(points_1, points_2, new_intrinsics_matrix_, cv::RANSAC, 0.999, threshold, inlier_mask_E);
+      // Essential and homography (plus inliers)
+      cv::Mat E, inlier_E;
+      cv::Mat H, inlier_H;
+      E = cv::findEssentialMat(match_pts1, match_pts2, new_intrinsics_matrix_, cv::RANSAC, 0.999, THRESHOLD, inlier_E);
+      H = cv::findHomography(match_pts1, match_pts2, cv::RANSAC, THRESHOLD, inlier_H);
+      // Number of inliers
+      int e = cv::sum(inlier_E)[0];
+      int h = cv::sum(inlier_H)[0];
 
-      // Perform geometric validation using Homography matrix
-      cv::Mat inlier_mask_H;
-      cv::Mat homography_matrix;
-      homography_matrix = cv::findHomography(points_1, points_2, cv::RANSAC, threshold, inlier_mask_H);
-
-      int e = cv::sum(inlier_mask_E)[0];
-      int h = cv::sum(inlier_mask_H)[0];
-
+      // Set inlier matches, verify if they're enough
       for(int k = 0; k < matches.size(); k++){
-        
-        if(e > h && inlier_mask_E.at<uchar>(k,0) == 1){
-        
+        if(e > h && inlier_E.at<uchar>(k,0) == 1)
           inlier_matches.push_back(matches[k]);
-        }
-
-        if(h > e && inlier_mask_H.at<uchar>(k,0) == 1){
-
+        if(h > e && inlier_H.at<uchar>(k,0) == 1)
           inlier_matches.push_back(matches[k]);
-        }
-        
       }
-
-      // Check if the number of inlier matches is sufficient
-      if(inlier_matches.size() > min_matches ){
-
+      if(inlier_matches.size() > MINIMUM_INLIERS)
         setMatches(i, j, inlier_matches);
-      }
-
-      matches.clear();
-      inlier_matches.clear();
-
       /////////////////////////////////////////////////////////////////////////////////////////
+
     }
   }
 }
