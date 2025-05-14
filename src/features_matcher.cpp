@@ -29,7 +29,7 @@ void FeatureMatcher::extractFeatures()
   // Creating the matcher outside of the loop to avoid reinitializing it
   // Setting the maximum number of features to a very high number to make sure
   // we have enough for an exhaustive match
-  cv::Ptr<cv::ORB> orb = cv::ORB::create(2000);
+  cv::Ptr<cv::ORB> orb = cv::ORB::create(4000);
 
   for( int i = 0; i < images_names_.size(); i++  )
   {
@@ -98,70 +98,6 @@ void FeatureMatcher::exhaustiveMatching()
       // In case of success, set the matches with the function:
       // setMatches( i, j, inlier_matches);
       /////////////////////////////////////////////////////////////////////////////////////////
-      
-      /*const int INLIERS_THRESHOLD = 5;
-      //cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING,false);
-      //cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create(
-      //  cv::DescriptorMatcher::FLANNBASED
-      //);
-      cv::Ptr<cv::BFMatcher> matcher = cv::BFMatcher::create(cv::NORM_HAMMING, true);
-
-
-      const cv::Mat &desc1 = descriptors_[i];
-      const cv::Mat &desc2 = descriptors_[j];
-      if (desc1.empty() || desc2.empty()) continue;
-
-      //if (desc1.type() != CV_32F) std::cout << "Wrong format!\n";
-      // Converting to appropriate format for DescriptorMatcher
-      cv::Mat query, train;
-      desc1.convertTo(query,CV_32F);
-      desc2.convertTo(train,CV_32F);
-
-
-      // Problems with knnmatch, short-circuiting with normal match
-      std::vector<cv::DMatch> good_matches;
-      matcher->match(query,train,good_matches);
-      if (good_matches.empty()) 
-      {
-        std::cout << "No matches found between " << i << " and " << j << "\n";
-        continue;
-      }
-
-      std::vector<cv::Point2f> pts1, pts2;
-      pts1.reserve(good_matches.size()); pts2.reserve(good_matches.size());
-      for (const auto &m : good_matches) {
-        pts1.push_back(features_[i][m.queryIdx].pt);
-        pts2.push_back(features_[j][m.trainIdx].pt);
-      }
-
-      cv::Mat maskE;
-      int inliersE = 0;
-      if (!pts1.empty()) {
-        cv::Mat E = cv::findEssentialMat(pts1, pts2, new_intrinsics_matrix_, cv::RANSAC, 0.999, 1.0, maskE);
-        inliersE = maskE.empty() ? 0 : cv::countNonZero(maskE);
-      }
-
-      cv::Mat maskH;
-      int inliersH = 0;
-      if (!pts1.empty()) {
-        cv::Mat H = cv::findHomography(pts1, pts2, cv::RANSAC, 1.0, maskH);
-        inliersH = maskH.empty() ? 0 : cv::countNonZero(maskH);
-      }
-
-      if (inliersE > inliersH && inliersE > INLIERS_THRESHOLD) {
-        inlier_matches.clear();
-        for (int k = 0; k < good_matches.size(); k++) {
-          if (maskE.at<uchar>(static_cast<int>(k))) {
-            inlier_matches.push_back(good_matches[k]);
-          }
-        }
-        if (inlier_matches.size() > INLIERS_THRESHOLD)
-        {
-          std::cout << "Images " << i << " and " << j << " have enough inliers\n";
-          setMatches(i, j, inlier_matches);
-        }
-      }*/
-
       const float THRESHOLD = 1.0f;
       const int MINIMUM_INLIERS = 5;
 

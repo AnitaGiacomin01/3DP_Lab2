@@ -766,7 +766,7 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
             // pt[2] = /*X coordinate of the estimated point */;
             /////////////////////////////////////////////////////////////////////////////////////////
 
-            /*cv::Mat r0(3, 1, CV_64F, cam0_data);
+            cv::Mat r0(3, 1, CV_64F, cam0_data);
             cv::Mat r1(3, 1, CV_64F, cam1_data);
             cv::Mat R0, R1;
             cv::Rodrigues(r0, R0);
@@ -804,40 +804,7 @@ bool BasicSfM::incrementalReconstruction( int seed_pair_idx0, int seed_pair_idx1
               pt[0] = point_3d.x;
               pt[1] = point_3d.y;
               pt[2] = point_3d.z;
-            }*/
-
-            points0.emplace_back(observations_[cam_observation_[new_cam_pose_idx][pt_idx] * 2], observations_[cam_observation_[new_cam_pose_idx][pt_idx]*2 +1]);
-            points1.emplace_back(observations_[cam_observation_[cam_idx][pt_idx]*2], observations_[cam_observation_[cam_idx][pt_idx] * 2 + 1]);
-            
-            //Index:0,1,2 contains R and 3,4,5 t
-            //We use Rodrigues to convert from axis angle to matrix form for both camera 0-1
-            cv::Rodrigues(cv::Vec3d(cam0_data[0],cam0_data[1],cam0_data[2]),proj_mat0(cv::Rect(0,0,3,3)));
-            proj_mat0.at<double>(0,3) = cam0_data[3];
-            proj_mat0.at<double>(1,3) = cam0_data[4];
-            proj_mat0.at<double>(2,3) = cam0_data[5];
-
-            cv::Rodrigues(cv::Vec3d(cam1_data[0],cam1_data[1],cam1_data[2]),proj_mat1(cv::Rect(0,0,3,3)));
-            proj_mat1.at<double>(0,3) = cam1_data[3];
-            proj_mat1.at<double>(1,3) = cam1_data[4];
-            proj_mat1.at<double>(2,3) = cam1_data[5];
-            
-            cv::triangulatePoints(proj_mat0, proj_mat1, points0, points1, hpoints4D);
-
-            //Check the cheirality constaint for pt_idx using the observation of this point in the
-            //camera poses with indices new_cam_pose_idx and cam_idx
-            int rr = 0;  
-            if(checkCheiralityConstraint(cam_idx,pt_idx) && checkCheiralityConstraint(new_cam_pose_idx,pt_idx)){
-              n_new_pts++;
-              pts_optim_iter_[pt_idx] = 1;
-              double *pt = pointBlockPtr(pt_idx);
-              pt[0] = hpoints4D.at<double>(0,rr)/hpoints4D.at<double>(3,rr);
-              pt[1] = hpoints4D.at<double>(1,rr)/hpoints4D.at<double>(3,rr);
-              pt[2] = hpoints4D.at<double>(2,rr)/hpoints4D.at<double>(3,rr);
             }
-           
-            //Redundant, for security
-            points0.clear();
-            points1.clear();
 
             /////////////////////////////////////////////////////////////////////////////////////////
 
