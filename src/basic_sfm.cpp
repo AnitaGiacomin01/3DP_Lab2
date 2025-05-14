@@ -27,12 +27,12 @@ struct ReprojectionError
     : u_(v), v_(v) {}
 
   template<typename T>
-  bool operator()(
+ bool operator()(
     const T* const cameraPose, // pointer to axis-angle followed by translation
     const T* const point3d, // estimated 3d position of observed point
     T* residual
   )
-  {
+  const {
     T reprojected[3]; // estimated reprojection of point (canonical coords)
     ceres::AngleAxisRotatePoint(cameraPose,point3d,reprojected);
     for (int i=0; i<3; i++)
