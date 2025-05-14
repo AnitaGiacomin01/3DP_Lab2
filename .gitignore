@@ -3,6 +3,7 @@ compile_flags.txt
 .cache/
 
 src/old_basic_sfm.cpp
+src/old_features_matcher.cpp
 
 # Compiled Object files
 **/.DS_Store
